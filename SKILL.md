@@ -1,161 +1,153 @@
 ---
 name: new-taipei-house
 description: >
-  新北市建案看屋檢查清單產生器。針對使用者鎖定的多個新北市預售/新成屋建案，
-  依「47 項看屋檢查清單」逐項搜尋公開資訊，輸出格式化 Excel 比較表，並自動上傳至
-  Google Drive「看房」資料夾。支援每週排程自動執行（Scheduled Tasks / Routine）。
+  新北市建案看屋檢查清單產生器。針對使用者鎖定的預售/新成屋建案（目前含一個台北內湖案），
+  依「47 項看屋檢查清單」逐項搜尋公開資訊與實價登錄，輸出三份格式化 Excel 比較表，
+  並自動上傳至 Google Drive「看房」資料夾。每週五 09:00（台北）排程自動執行。
 
   ALWAYS trigger this skill for prompts containing: "看屋檢查清單", "新北建案",
   "看房比較", "看屋表", "更新看屋", "建案比較", "預售屋比較", or any project name
-  in the active list (民生新埔, 敦南之森, 新濠漾, 新濠岳, 大同新紀元 等).
-  Also trigger when the user references the file name pattern "看屋檢查清單_新北建案_*.xlsx",
-  or when a scheduled Routine named「New taipei house」fires.
+  in the active list (民生新埔, 敦南之森, 新濠漾, 新濠岳, 汐止星野之森, 文德好境).
+  Also trigger when the user references the file name pattern
+  "看屋檢查清單_新北建案_*.xlsx", or when the weekly Routine「New taipei house 每週看屋清單更新」fires.
 ---
 
 # 新北市建案看屋檢查清單：執行指南
 
 ## 任務目標
 
-針對 `references/projects.md` 裡列出的新北市建案，逐項填寫 `references/checklist.md`
-裡的 47 項檢查清單，產出格式化 .xlsx 報表，並**自動上傳到 Google Drive「看房」資料夾**
+針對 `references/projects.md` 的建案，逐項填寫 `references/checklist.md` 的 47 項檢查清單，
+產出**三份**格式化 .xlsx，並自動上傳至 Google Drive「看房」資料夾
 （資料夾 ID：`12wETI6GI8F5arzLwg7ZkMXd5K5P4Swi-`）。
 
 **核心設計原則：**
-- **新增/刪除建案**只需編輯 `references/projects.md`，不必動 SKILL.md 或腳本
-- **格式由腳本固定**（深藍標題列、淺藍分類列、未知欄位紅字、欄寬與列高），確保每週輸出視覺一致
-- **資料優先以最近一份成果為起點**（增量更新而非從零開始）
-- **自動上傳**：已於 2026-08-22 驗證 Google Drive MCP 對「看房」資料夾具備寫入權限
-  （`canAddChildren: true`，owner 為 `wsdfex@gmail.com`），直接呼叫
-  `Google Drive:create_file` 上傳即可，**不需要再要求使用者手動拖拉**。
-  若未來上傳失敗（例如再次出現 `canAddChildren: false` 或 403），退回舊流程：
-  呈現檔案下載連結並提醒使用者手動上傳，同時在回覆中說明失敗原因。
+- **新增/刪除建案、修改看屋條件**只需編輯 `references/projects.md`，不必動本檔或腳本
+- **格式由腳本固定**（深藍標題列、淺藍分類列、未知欄位紅字、超出看屋範圍藍字粗體）
+- **以上一份 JSON 為起點做增量更新**，不要每次從零開始
+- **必須拆成三份上傳**（原因見 Step 5，這不是選配）
 
 ---
 
-## Step 1：載入起始範本
+## Step 1：載入起始資料
 
-依下列優先順序找出「上一次的 xlsx」當作起點：
+依下列優先順序取得 baseline：
 
-1. **使用者本次對話有上傳** `看屋檢查清單_新北建案_*.xlsx` → 用該檔案
-2. **Google Drive「看房」資料夾裡有上一份報表** → 用 `Google Drive:search_files`
+1. **repo 內 `data/projects_data_*.json`** 取日期最新的一份 → 直接當起點（最省時，格式已對齊）
+2. **Google Drive「看房」資料夾**有上一輪的 xlsx → 用 `Google Drive:search_files`
    （`query: "title contains '看屋檢查清單_新北建案_' and parentId = '12wETI6GI8F5arzLwg7ZkMXd5K5P4Swi-'"`）
-   找出最新一份，下載內容當起點
-3. **都沒有** → 用空白範本（`scripts/build_xlsx.py` 內建的預設結構）
+   讀回內容當 baseline
+3. **都沒有** → 從空白起跑，全部標「未知待查詢」再逐步補
 
-從起始範本萃取每個建案「上次已填寫的資料」當作 baseline，本週只需更新「未知待查詢」項目
-或建案近期新公告（新一輪價格、新公設、新交屋進度）。
+本輪只需更新「未知待查詢」欄位、近期新公告（新價格、新公設、交屋進度）與實價登錄最新數字。
 
 ---
 
-## Step 2：讀取建案清單與檢查清單
+## Step 2：讀取參考檔
 
-讀取三份參考檔：
-- `references/projects.md` — **目前要比較的建案列表**（地址、捷運站、生活圈）
+- `references/projects.md` — 建案清單（地址、捷運、**看屋房型條件 `room_filter`**）
 - `references/checklist.md` — 47 項檢查清單（6 大分類）
 - `references/sources.md` — 搜尋來源優先順序
 
-**如果使用者要新增/刪除/修改建案**，直接編輯 `references/projects.md` 即可。
+`room_filter` 是**使用者的看屋篩選條件**，不是建案本身的產品限制。填表時聚焦符合條件的房型；
+超出範圍的房型用 `**...**` 標記為「不在看屋範圍」，不要整段刪除（比價時仍有參考價值）。
 
 ---
 
-## Step 3：逐建案搜尋資料
+## Step 3：搜尋資料（重點在實價登錄）
 
-對 `projects.md` 裡每一個建案，搜尋並填寫 47 項清單。**請平行搜尋以節省時間。**
+對每個建案**平行搜尋**。實價登錄是本表最有價值的部分，務必多平台交叉比對：
 
-### 搜尋策略
-- 每個建案先以「建案名稱 + 地區」做一輪 `web_search`，找出 591、樂居、住展、5168 的頁面
-- 接著對重要頁面用 `web_fetch` 取得詳細資料（坪數區間、實價登錄、公設、樓層）
-- 再對「實價登錄、公設比、總價區間、車位、嫌惡設施」做專項補搜尋
-- 找不到的項目**標記「未知待查詢」**（腳本會自動上紅字），**不要編造**
+### 搜尋順序
+1. 「建案名 + 地區」一輪 `WebSearch` → 找出 591／樂居／樂屋網／5168／住展的頁面
+2. 「建案名 + 實價登錄 + 成交 + 坪數 + 總價 + 車位 + 公設比」專項搜尋
+   → **多平台數字常有出入，全部列出並註明來源**（例：591 均價76萬、樂屋網73.7萬）
+3. 「建案名 + 學區 + 生活機能 + 嫌惡設施 + 建材 + 評價」補搜尋
+   → Mobile01 與看屋部落格常有負評與缺點，一併收錄
+4. 分期／分區建案（如星野之森 A~G）**逐區查**，各區價格與格局差異大
 
 ### 填寫規則
-- 數字要具體：坪數、米數、距離、價格區間
-- 一個欄位塞入多項資訊時用換行（`\n`），腳本會啟用自動換行
-- 大於 2 房（含）的資訊**用「藍字粗體」標記** ← 因為使用者主要鎖定套房/1+1 房
-- 「未知待查詢」是合法答案，不要硬猜
+- 數字要具體：坪數、公尺數、距離、價格區間、實登筆數
+- 多項資訊用 `\n` 換行（腳本已開自動換行）
+- 超出 `room_filter` 的房型資訊用 `**xxx**` 包起來 → 腳本轉成藍字粗體
+- 找不到就寫「未知待查詢」→ 腳本轉紅字。**絕不編造數字或事實**
+- 兩份來源矛盾時**兩個都寫並標註**（例：完工年份 2019／2022 兩說，需調謄本）
+
+### 可以合理推算、不算編造的欄位
+以下標明「【試算】」後可填，不必留白：
+- **貸款成數與利率試算**：依當時利率行情（先搜尋確認）× 各案總價計算月付金
+- **稅費估算**：契稅=房屋評定現值×6%、印花稅0.1%、代書費1.5~2萬、規費0.1%
+- **保固條款**：預售屋依法結構15年、固定建材設備1年（自交屋日起算）
+- **履約保證**：預售屋法定五擇一（價金返還保證／價金信託／不動產開發信託／同業連帶擔保／公會連帶保證）
+- **斷層帶**：台北盆地列冊活動斷層僅山腳斷層（第二類，樹林—北投—金山一線）
+
+共通的法規與試算前提**寫在 `sources` 欄位**（表格第2列），不要在 6 個欄位重複，
+各建案儲存格只留該案專屬的數字。
 
 ---
 
-## Step 4：產生 .xlsx 檔案
+## Step 4：產生三份 .xlsx
 
-將每個建案的資料整理成 JSON 後，呼叫 `scripts/build_xlsx.py`：
+整理成 JSON 後，用 `--categories` 分三次產出：
 
 ```bash
-cd <repo根目錄，例如 /home/user/New-taipei-house 或 workdir 內的 clone 路徑>
-python3 scripts/build_xlsx.py \
-  --data /tmp/projects_data.json \
-  --output ./output/看屋檢查清單_新北建案_YYYY-MM-DD.xlsx
+cd <repo 根目錄>
+SP=/tmp/projects_data.json   # 你整理好的 JSON
+
+python3 scripts/build_xlsx.py --data $SP --categories 1,2,3 \
+  --output "output/看屋檢查清單_新北建案_YYYY-MM-DD_上_基本與產品.xlsx"
+python3 scripts/build_xlsx.py --data $SP --categories 4,5 \
+  --output "output/看屋檢查清單_新北建案_YYYY-MM-DD_中_生活與環境.xlsx"
+python3 scripts/build_xlsx.py --data $SP --categories 6 \
+  --output "output/看屋檢查清單_新北建案_YYYY-MM-DD_下_財務評估.xlsx"
 ```
 
-`projects_data.json` 結構（**詳見 `scripts/build_xlsx.py` 開頭註解**）：
-```json
-{
-  "search_date": "2026-08-24",
-  "sources": "591新建案、591實價登錄、樂居、住展、5168比價王...",
-  "projects": [
-    {
-      "name": "民生新埔",
-      "address": "新北板橋新埔 民生路三段",
-      "metro": "新埔站/民生新埔站(步行5分鐘)",
-      "data": {
-        "建案名稱": "民生新埔",
-        "各房型權狀坪數區間": "套房12坪、1+1房15坪\n**2房18~28坪、3房30~32坪**",
-        "...": "..."
-      }
-    }
-  ]
-}
-```
+三份都保留**全部建案欄位**，只是各切一段項目，橫向比較不受影響。
 
-- 用 `**xxx**` 包住 → 腳本自動轉成 **藍字粗體**（大於 2 房用）
-- 字串等於 `未知待查詢` 或開頭包含此字串 → 腳本自動轉成 **紅字**
-- 其他文字 → 一般黑字
-
-腳本完成後會印出檔案路徑。
+JSON 結構詳見 `scripts/build_xlsx.py` 檔頭註解；`data/projects_data_2026-08-23.json` 是可直接參考的完整範例。
 
 ---
 
-## Step 5：上傳到 Google Drive「看房」資料夾 + 呈現檔案
+## Step 5：上傳 Google Drive（必須分三份）
 
-1. 讀取產出的 xlsx 檔內容，呼叫 `Google Drive:create_file` 上傳：
-   - `title`: `看屋檢查清單_新北建案_YYYY-MM-DD.xlsx`
-   - `parentId`: `12wETI6GI8F5arzLwg7ZkMXd5K5P4Swi-`
-   - `base64Content`: 檔案的 base64 內容
-   - `contentMimeType`: `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
-   - `disableConversionToGoogleType`: `true`（保留 .xlsx 格式與腳本的自訂樣式，不要被轉成 Google 試算表，否則顏色/格式會跑掉）
-2. **若是使用者互動的對話（非排程自動執行）**，額外呼叫 `present_files` 讓使用者也能直接下載。
-3. 回覆使用者：本次已更新哪些建案、哪些欄位還是「未知待查詢」、Google Drive 檔案連結
-   （`create_file` 回傳的 `viewUrl`）。
+依序上傳三個檔案，每份都用 `Google Drive:create_file`：
+- `parentId`: `12wETI6GI8F5arzLwg7ZkMXd5K5P4Swi-`
+- `contentMimeType`: `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+- `disableConversionToGoogleType`: `true`（**必加**，否則被轉成 Google 試算表，顏色與格式全失）
+- `base64Content`: 該檔的 base64
 
-### 自動排程執行（Scheduled Task / Routine 觸發，無人在場確認）
+**每次上傳後核對回傳的 `fileSize` 與本機 `stat -c%s` 是否完全相同。**
+不一致代表傳輸過程掉字元，檔案已損壞 → 用 `Google Drive:trash_file` 刪掉再重傳。
 
-- 不要等待任何使用者確認，直接完整跑完 Step 1~5。
-- 上傳成功後**不需要**呼叫 `present_files`（沒有互動使用者可以下載）。
-- 若上傳失敗，仍要把產出的 xlsx 留在 `./output/` 底下，並在任務摘要中清楚寫明失敗原因，
-  以便下次排程或使用者回來查看時能得知狀況。
-- 若這次執行是在 git repo 環境下（例如透過 Claude Code Remote 的排程），完成後可視情況
-  把 `references/projects.md`（若有更新 baseline 備註）與 `output/` 內的 xlsx 一併 commit，
-  但**不要**強制 push 到與使用者衝突的分支；一般排程任務只需完成 Drive 上傳即可，repo commit
-  為選配。
+### ⚠️ 為什麼一定要拆三份（2026-08-23 實測）
+Drive 連接器只接受「內嵌的 base64 檔案內容」，沒有本機路徑上傳。
+單一 18KB 檔案 = 約 24,000 字元 base64，實測連續四次都無法完整傳輸
+（掉 1 byte 或整段遺失，產生打不開的壞檔）。
+**可靠上限約 16,000 字元 base64（約 12KB 檔案）**，故拆三份。
+若日後建案增加使檔案再變大，就再往下拆（例如分類 1,2 / 3 / 4 / 5 / 6）。
 
-**絕對不要做的事：**
-- ❌ 不要把 xlsx 轉成 Google Sheets 格式（會遺失自訂顏色/格式），務必
-  `disableConversionToGoogleType: true`
-- ❌ 找不到的欄位不要編造數字或事實
-- ❌ 排程自動執行時不要卡住等待使用者輸入
+上傳完成後：
+- **互動對話**：另外呼叫 `SendUserFile` 讓使用者也能直接下載，並回報各案更新重點
+- **排程執行**：不需 `SendUserFile`；把三個 `viewUrl` 與本輪更新摘要寫進任務結論
 
 ---
 
-## 輸出格式規格（腳本已固定，僅供參考）
+## Step 6：留存到 repo
 
-- **第 1 列**：標題「新北市建案 看屋檢查清單」深藍底白字、16pt 粗體、置中、合併儲存格
-- **第 2 列**：資料搜尋日期 + 來源清單
-- **第 3 列**：表頭（深藍 #1F3864 底白字），每個建案一欄含「建案名稱\n地址\n捷運站」
-- **分類列**：淺藍 #BDD7EE 底加粗（一、基本資料 / 二、建商與代銷背景 / 三、產品規劃與坪數 /
-  四、生活機能與交通 / 五、嫌惡設施與環境風險 / 六、財務評估）
-- **資料列**：行高 45、自動換行、上對齊
-- **欄寬**：A=5（分類）、B=18（項目）、C~G=38（各建案）
-- **檔名**：`看屋檢查清單_新北建案_YYYY-MM-DD.xlsx`（YYYY-MM-DD = 當天日期）
+把本輪的 JSON 存成 `data/projects_data_YYYY-MM-DD.json`、三份 xlsx 放 `output/`，
+一起 commit 並 push 回 `claude/new-taipei-house-scraper-vx1gm1` 分支，
+下一輪即可直接沿用（Step 1 的第 1 順位）。
+
+---
+
+## 輸出格式規格（腳本已固定）
+
+- **第 1 列**：標題「新北市建案 看屋檢查清單」深藍 #1F3864 底白字、16pt 粗體、置中、合併
+- **第 2 列**：搜尋日期 + 來源清單 + 共通法規/試算說明
+- **第 3 列**：表頭（深藍底白字），每欄含「建案名稱\n地址\n捷運站」
+- **分類列**：淺藍 #BDD7EE 底加粗
+- **資料列**：行高 45、自動換行、上對齊；紅字=未知待查詢、藍字粗體=超出看屋範圍
+- **欄寬**：A=5、B=18、C~H=38；凍結窗格 C4
+- **檔名**：`看屋檢查清單_新北建案_YYYY-MM-DD_{上_基本與產品|中_生活與環境|下_財務評估}.xlsx`
 
 ---
 
@@ -163,8 +155,16 @@ python3 scripts/build_xlsx.py \
 
 | 症狀 | 原因 | 解法 |
 |---|---|---|
-| 找不到上週的 xlsx | 使用者沒上傳、Drive 裡也沒有 | 從空白範本起跑，全部當未知待查詢慢慢填 |
-| 建案名打錯找不到資料 | 591/樂居用全名搜尋失敗 | 改用部分名 + 區域，例如「新濠漾 三重」而非「新濠漾4-英倫公園」 |
-| 寫入欄位卻沒上色 | 沒用 `**xxx**` 包大房資訊、或未知待查詢拼字不對 | 確認標記符號正確 |
-| Drive 上傳失敗 / canAddChildren 又變 false | 資料夾權限被改回去、OAuth scope 不足 | 退回舊流程：present_files 呈現下載連結 + 提醒手動拖拉，並在回覆說明失敗原因 |
-| xlsx 上傳後顏色/格式不見 | 被自動轉成 Google Sheets | 上傳時務必加 `disableConversionToGoogleType: true` |
+| 上傳後 fileSize 與本機不符 | base64 傳輸掉字元 | 刪掉壞檔重傳；若反覆失敗就把該份再拆小 |
+| 上傳回「not a valid base64 string」 | 轉錄有誤（好事，系統擋下了沒產生壞檔） | 直接重傳該份 |
+| xlsx 開啟後顏色/格式不見 | 被轉成 Google Sheets | 確認有加 `disableConversionToGoogleType: true` |
+| 建案名找不到資料 | 用全名搜尋失敗 | 改「部分名 + 區域」，例如「新濠漾 三重」而非「新濠漾4-英倫公園」 |
+| 分區建案價格差很多 | A~G 各區獨立定價 | 逐區查詢並在同一格分行列出 |
+| 未知待查詢比例過高 | 只搜了建案官網 | 補搜實價登錄平台 + Mobile01 + 看屋部落格；並填上可試算的欄位 |
+| 找不到上一輪資料 | repo 沒 clone 或分支不對 | 確認在 `claude/new-taipei-house-scraper-vx1gm1` 分支且已 pull |
+
+## 目前仍難以取得的欄位（非失誤，屬正常）
+
+建照/使照字號、建商財務評等、糾紛訴訟紀錄、是否有夾層、公車班次、治安統計、
+預售案的管理費——這些多半要到接待中心索取或調謄本才有。
+標「未知待查詢」即可，並在回報時告訴使用者這些需現場詢問。
