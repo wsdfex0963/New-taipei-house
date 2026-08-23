@@ -35,6 +35,8 @@ import sys
 from pathlib import Path
 
 from openpyxl import Workbook
+from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
@@ -96,10 +98,15 @@ def colored_runs(cell, text):
         return
 
     if "**" in text:
-        parts = re.split(r"(\*\*[^*]+\*\*)", text)
-        plain = "".join(p[2:-2] if p.startswith("**") and p.endswith("**") else p for p in parts)
-        cell.value = plain
-        cell.font = Font(color=BLUE_BOLD, bold=True, size=10)
+        parts = [p for p in re.split(r"(\*\*[^*]+\*\*)", text) if p]
+        blocks = []
+        for p in parts:
+            if p.startswith("**") and p.endswith("**"):
+                blocks.append(TextBlock(InlineFont(color=BLUE_BOLD, b=True, sz=10), p[2:-2]))
+            else:
+                blocks.append(TextBlock(InlineFont(color="FF000000", sz=10), p))
+        cell.value = CellRichText(blocks)
+        cell.font = Font(color="000000", size=10)
         return
 
     cell.value = text
