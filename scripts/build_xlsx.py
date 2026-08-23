@@ -113,13 +113,17 @@ def colored_runs(cell, text):
     cell.font = Font(color="000000", size=10)
 
 
-def build_workbook(payload):
+def build_workbook(payload, categories=None):
+    """categories 為 1-based 分類編號清單，None 表示全部六大分類。"""
     projects = payload.get("projects", [])
     search_date = payload.get("search_date", "")
     sources = payload.get("sources", "")
 
+    selected = CATEGORIES if categories is None else [
+        CATEGORIES[i - 1] for i in categories
+    ]
+
     n_cols = 2 + len(projects)  # A=分類 B=項目 C.. = 各建案
-    n_rows = 3 + sum(len(items) + 1 for _, items in CATEGORIES)  # +1 每類別的分類列
 
     wb = Workbook()
     ws = wb.active
@@ -161,7 +165,7 @@ def build_workbook(payload):
 
     # 資料列
     row = 4
-    for cat_name, items in CATEGORIES:
+    for cat_name, items in selected:
         ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=n_cols)
         cat_cell = ws.cell(row=row, column=1, value=cat_name)
         cat_cell.font = Font(bold=True, size=11)
@@ -202,10 +206,18 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True, help="輸入 JSON 檔路徑")
     ap.add_argument("--output", required=True, help="輸出 xlsx 檔路徑")
+    ap.add_argument(
+        "--categories",
+        help="只輸出指定的分類（1-based，逗號分隔，例如 1,2,3）。"
+        "用於把報表拆成多份較小的檔案；省略則輸出全部六大分類。",
+    )
     args = ap.parse_args()
 
     payload = json.loads(Path(args.data).read_text(encoding="utf-8"))
-    wb = build_workbook(payload)
+    cats = None
+    if args.categories:
+        cats = [int(x) for x in args.categories.split(",") if x.strip()]
+    wb = build_workbook(payload, categories=cats)
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
