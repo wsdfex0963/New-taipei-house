@@ -202,6 +202,36 @@ def build_workbook(payload, categories=None):
     return wb
 
 
+def slim_xlsx(path):
+    """移除 xl/theme/theme1.xml 讓檔案縮小約 18%，供 Drive 內嵌上傳使用。
+
+    openpyxl 產生的 styles.xml 只有預設字型參照 theme（<color theme="1"/>），
+    先換成實色再移除 theme 部件，避免留下懸空參照讓 Excel 判定檔案損毀。
+    """
+    import zipfile
+
+    src = Path(path)
+    tmp = src.with_suffix(".slim.tmp")
+    with zipfile.ZipFile(src) as zin, zipfile.ZipFile(
+        tmp, "w", zipfile.ZIP_DEFLATED
+    ) as zout:
+        for item in zin.infolist():
+            if item.filename == "xl/theme/theme1.xml":
+                continue
+            data = zin.read(item.filename)
+            if item.filename == "xl/styles.xml":
+                data = data.replace(b'<color theme="1" />', b'<color rgb="FF000000" />')
+                data = data.replace(b'<color theme="1"/>', b'<color rgb="FF000000"/>')
+            elif item.filename == "[Content_Types].xml":
+                data = re.sub(
+                    rb'<Override PartName="/xl/theme/theme1\.xml"[^>]*/>', b"", data
+                )
+            elif item.filename == "xl/_rels/workbook.xml.rels":
+                data = re.sub(rb'<Relationship[^>]*theme1\.xml"[^>]*/>', b"", data)
+            zout.writestr(item, data)
+    tmp.replace(src)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True, help="輸入 JSON 檔路徑")
@@ -210,6 +240,11 @@ def main():
         "--categories",
         help="只輸出指定的分類（1-based，逗號分隔，例如 1,2,3）。"
         "用於把報表拆成多份較小的檔案；省略則輸出全部六大分類。",
+    )
+    ap.add_argument(
+        "--slim",
+        action="store_true",
+        help="移除 theme 部件讓檔案縮小約18%%，供 Google Drive 內嵌上傳（不影響顯示）。",
     )
     args = ap.parse_args()
 
@@ -222,6 +257,8 @@ def main():
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out_path)
+    if args.slim:
+        slim_xlsx(out_path)
     print(str(out_path))
 
 
