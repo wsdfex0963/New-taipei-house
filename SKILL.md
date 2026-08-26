@@ -140,7 +140,22 @@ JSON 結構詳見 `scripts/build_xlsx.py` 檔頭註解；`data/projects_data_202
 - `base64Content`: 該檔的 base64（用 `base64 -w0 <檔案>` 取得）
 
 **每次上傳後核對回傳的 `fileSize` 與本機 `stat -c%s` 是否完全相同。**
-不一致代表傳輸過程掉字元，檔案已損壞 → 用 `Google Drive:trash_file` 刪掉再重傳。
+不一致代表傳輸掉字元 → 用 `Google Drive:trash_file` 刪掉再重傳。
+
+### ⚠️ fileSize 相符「不等於」檔案正確（2026-08-26 實例）
+base64 若被替換掉某幾個字元（而非增減），位元組數不變、fileSize 一樣過關，
+但解出來的 zip 內容已毀，Excel 打不開。曾有一份檔案 fileSize 完全相符卻無法開啟。
+
+要真正確認內容，用 `Google Drive:read_file_content` 讀回來看有沒有正常表格文字。
+**但務必注意：Drive 的文字擷取是非同步索引的，剛上傳的檔案讀回來一律是空字串
+（`{"fileContent":""}`），這代表「還沒索引完」，不代表檔案壞掉。**
+至少等 15~20 分鐘後再讀，才有判讀價值。
+
+（2026-08-26 曾因為把「剛上傳讀到空字串」誤判成「檔案損毀」，反覆改寫腳本、
+上傳十幾份測試檔在追一個不存在的 bug。切勿重蹈覆轍。）
+
+若要立刻確認，改用 `download_file_content` 把檔案抓回來、寫回磁碟後與本機
+`md5sum` 比對——這是唯一即時且可靠的驗證方式。
 
 五份都上傳成功後，把上一輪日期的舊檔用 `trash_file` 清掉，避免資料夾混淆。
 
@@ -190,6 +205,8 @@ base64 必須由模型逐字元輸出，太長會被輸出上限截斷或掉字�
 | 症狀 | 原因 | 解法 |
 |---|---|---|
 | 上傳後 fileSize 與本機不符 | base64 傳輸掉字元 | 刪掉壞檔重傳；若反覆失敗就把該份再拆小 |
+| fileSize 相符但檔案打不開 | base64 被替換字元，位元組數不變 | download_file_content 抓回比對 md5，不符就重傳 |
+| read_file_content 回傳空字串 | **Drive 尚未完成索引**，非檔案損毀 | 等 15~20 分鐘再讀；要即時驗證就比對 md5 |
 | 上傳回「not a valid base64 string」 | 轉錄有誤（好事，系統擋下了沒產生壞檔） | 直接重傳該份 |
 | base64 輸出到一半停住 | 單次回應輸出額度不足 | 該份再拆小；一次回應只傳一份 |
 | xlsx 開啟後顏色/格式不見 | 被轉成 Google Sheets | 確認有加 `disableConversionToGoogleType: true` |
