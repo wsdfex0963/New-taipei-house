@@ -113,8 +113,12 @@ def colored_runs(cell, text):
     cell.font = Font(color="000000", size=10)
 
 
-def build_workbook(payload, categories=None):
-    """categories 為 1-based 分類編號清單，None 表示全部六大分類。"""
+def build_workbook(payload, categories=None, items=None):
+    """categories 為 1-based 分類編號清單，None 表示全部六大分類。
+
+    items 為 (start, end) 的 1-based 閉區間，只在單一分類時使用，
+    用來把項目太多、檔案太大的分類再切成幾份（見 SKILL.md 的上傳上限）。
+    """
     projects = payload.get("projects", [])
     search_date = payload.get("search_date", "")
     sources = payload.get("sources", "")
@@ -122,6 +126,12 @@ def build_workbook(payload, categories=None):
     selected = CATEGORIES if categories is None else [
         CATEGORIES[i - 1] for i in categories
     ]
+    if items:
+        if len(selected) != 1:
+            raise SystemExit("--items 只能搭配單一 --categories 使用")
+        name, all_items = selected[0]
+        start, end = items
+        selected = [(f"{name}（第{start}~{end}項）", all_items[start - 1:end])]
 
     n_cols = 2 + len(projects)  # A=分類 B=項目 C.. = 各建案
 
@@ -242,6 +252,11 @@ def main():
         "用於把報表拆成多份較小的檔案；省略則輸出全部六大分類。",
     )
     ap.add_argument(
+        "--items",
+        help="只輸出該分類的第 N~M 項（1-based 閉區間，例如 1-5）。"
+        "僅能搭配單一 --categories，用於項目太多、檔案超過上傳上限時再往下拆。",
+    )
+    ap.add_argument(
         "--slim",
         action="store_true",
         help="移除 theme 部件讓檔案縮小約18%%，供 Google Drive 內嵌上傳（不影響顯示）。",
@@ -252,7 +267,11 @@ def main():
     cats = None
     if args.categories:
         cats = [int(x) for x in args.categories.split(",") if x.strip()]
-    wb = build_workbook(payload, categories=cats)
+    rng = None
+    if args.items:
+        a, b = args.items.split("-")
+        rng = (int(a), int(b))
+    wb = build_workbook(payload, categories=cats, items=rng)
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
