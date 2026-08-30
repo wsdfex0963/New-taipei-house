@@ -1,13 +1,13 @@
 ---
 name: new-taipei-house
 description: >
-  新北市建案看屋檢查清單產生器。針對使用者鎖定的預售/新成屋建案（目前 7 案，含一個台北內湖案），
+  新北市建案看屋檢查清單產生器。針對使用者鎖定的預售/新成屋建案（目前 6 案，含一個台北內湖案），
   依「47 項看屋檢查清單」逐項搜尋公開資訊與實價登錄，輸出五份格式化 Excel 比較表，
   並自動上傳至 Google Drive「看房」資料夾。每週五 09:00（台北）排程自動執行。
 
   ALWAYS trigger this skill for prompts containing: "看屋檢查清單", "新北建案",
   "看房比較", "看屋表", "更新看屋", "建案比較", "預售屋比較", or any project name
-  in the active list (民生新埔, 敦南之森, 新濠漾, 新濠岳, 汐止星野之森, 文德好境, 將捷MRT／景平站).
+  in the active list (民生新埔, 敦南之森, 新濠漾, 新濠岳, 文德好境, 將捷MRT／景平站).
   Also trigger when the user references the file name pattern
   "看屋檢查清單_新北建案_*.xlsx", or when the weekly Routine「New taipei house 每週看屋清單更新」fires.
 ---
@@ -53,7 +53,6 @@ description: >
 
 目前使用者的看屋條件（詳見 projects.md）：
 - **文德好境**（台北內湖）只看 1 房
-- **汐止星野之森** A~G 全區都看，以 1 房為主、最多看到 2 房
 - **將捷MRT**（中和景平站捷運聯開共構宅）注意僅部分樓層可售，其餘為捷運局分回
 
 ---
