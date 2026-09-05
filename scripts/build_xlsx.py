@@ -22,7 +22,11 @@
 
 標記規則：
   - `**xxx**` 包住的文字 -> 藍字粗體（用於 > 2 房的資訊）
-  - 字串等於「未知待查詢」或以此開頭 -> 紅字
+  - 字串等於「未知待查詢」或以此開頭 -> 整格紅字
+  - `【現場確認】` -> 紅字粗體（公開資料查不到，須到接待中心問或調謄本）
+  - `【試算】`     -> 橘字粗體（依公式推算，非官方公告值）
+  - `⚠️` 起至行尾  -> 紅字（風險提醒）
+  - `✅` 起至行尾  -> 綠字（正面條件）
   - 其餘 -> 一般黑字
 
 用法：
@@ -81,13 +85,24 @@ DARK_BLUE = "1F3864"
 LIGHT_BLUE = "BDD7EE"
 RED = "C00000"
 BLUE_BOLD = "1F4E78"
+CALC_ORANGE = "BF8F00"
+GREEN = "1E7145"
 
 thin = Side(style="thin", color="B7B7B7")
 BORDER = Border(left=thin, right=thin, top=thin, bottom=thin)
 
 
+TOKEN_RE = re.compile(
+    r"(\*\*[^*]+\*\*"          # **超出看屋範圍**
+    r"|【現場確認】"            # 須到接待中心／調謄本才問得到
+    r"|【試算】"                # 依公式推算，非官方公告值
+    r"|⚠️[^\n]*"                # 風險提醒，整行標色
+    r"|✅[^\n]*)"               # 正面條件，整行標色
+)
+
+
 def colored_runs(cell, text):
-    """依 **xxx** / 未知待查詢 規則，把文字拆成多個 rich-text 片段上色。"""
+    """依 **xxx**／【現場確認】／【試算】／⚠️／✅／未知待查詢 規則拆成 rich-text 片段上色。"""
     if text is None:
         text = ""
     text = str(text)
@@ -97,14 +112,24 @@ def colored_runs(cell, text):
         cell.font = Font(color=RED, size=10)
         return
 
-    if "**" in text:
-        parts = [p for p in re.split(r"(\*\*[^*]+\*\*)", text) if p]
+    parts = [p for p in TOKEN_RE.split(text) if p]
+    if len(parts) > 1 or (parts and TOKEN_RE.fullmatch(parts[0])):
         blocks = []
         for p in parts:
             if p.startswith("**") and p.endswith("**"):
-                blocks.append(TextBlock(InlineFont(color=BLUE_BOLD, b=True, sz=10), p[2:-2]))
+                f = InlineFont(color=BLUE_BOLD, b=True, sz=10)
+                p = p[2:-2]
+            elif p == "【現場確認】":
+                f = InlineFont(color=RED, b=True, sz=10)
+            elif p == "【試算】":
+                f = InlineFont(color=CALC_ORANGE, b=True, sz=10)
+            elif p.startswith("⚠️"):
+                f = InlineFont(color=RED, sz=10)
+            elif p.startswith("✅"):
+                f = InlineFont(color=GREEN, sz=10)
             else:
-                blocks.append(TextBlock(InlineFont(color="FF000000", sz=10), p))
+                f = InlineFont(color="FF000000", sz=10)
+            blocks.append(TextBlock(f, p))
         cell.value = CellRichText(blocks)
         cell.font = Font(color="000000", size=10)
         return
