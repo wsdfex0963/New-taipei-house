@@ -2,7 +2,7 @@
 name: new-taipei-house
 description: >
   新北市建案看屋檢查清單產生器。針對使用者鎖定的預售/新成屋建案（目前 7 案，含一個台北內湖案），
-  依「47 項看屋檢查清單」逐項搜尋公開資訊與實價登錄，輸出五份格式化 Excel 比較表，
+  依「47 項看屋檢查清單」逐項搜尋公開資訊與實價登錄，輸出六份格式化 Excel 比較表，
   並自動上傳至 Google Drive「看房」資料夾。每週五 09:00（台北）排程自動執行。
 
   ALWAYS trigger this skill for prompts containing: "看屋檢查清單", "新北建案",
@@ -17,14 +17,14 @@ description: >
 ## 任務目標
 
 針對 `references/projects.md` 的建案，逐項填寫 `references/checklist.md` 的 47 項檢查清單，
-產出**五份**格式化 .xlsx，並自動上傳至 Google Drive「看房」資料夾
+產出**六份**格式化 .xlsx，並自動上傳至 Google Drive「看房」資料夾
 （資料夾 ID：`12wETI6GI8F5arzLwg7ZkMXd5K5P4Swi-`）。
 
 **核心設計原則：**
 - **新增/刪除建案、修改看屋條件**只需編輯 `references/projects.md`，不必動本檔或腳本
 - **格式由腳本固定**（深藍標題列、淺藍分類列、未知欄位紅字、超出看屋範圍藍字粗體）
 - **以上一份 JSON 為起點做增量更新**，不要每次從零開始
-- **必須拆成五份 + 加 `--slim` 上傳**（原因見 Step 5，這不是選配）
+- **必須拆成六份（每分類一份）+ `--slim` + 二次瘦身後上傳**（原因見 Step 5，這不是選配）
 
 ---
 
@@ -127,31 +127,34 @@ grep -o "貸[0-9]*成" data/projects_data_${D}.json | sort -u
 
 ---
 
-## Step 4：產生五份 .xlsx（一律加 `--slim`）
+## Step 4：產生六份 .xlsx（每個分類一份，一律加 `--slim` + 二次瘦身）
 
-整理成 JSON 後，用 `--categories` 分五次產出：
+> 2026-09-25 更正：本節原寫「五份（1+2 合併）」，但排程指令與 09-11 起的實際產出
+> 都是**六份、一個分類一份**。以下為現行做法，檔名須與排程指令一致。
+
+新 session 的容器不一定裝有 openpyxl，先確認：`pip install -q "openpyxl>=3.1"`。
 
 ```bash
 cd <repo 根目錄>
 SP=data/projects_data_YYYY-MM-DD.json   # 你整理好的 JSON
 D=YYYY-MM-DD
-
-python3 scripts/build_xlsx.py --data $SP --slim --categories 1,2 \
-  --output "output/看屋檢查清單_新北建案_${D}_一_基本與建商.xlsx"
-python3 scripts/build_xlsx.py --data $SP --slim --categories 3 \
-  --output "output/看屋檢查清單_新北建案_${D}_二_產品與坪數.xlsx"
-python3 scripts/build_xlsx.py --data $SP --slim --categories 4 \
-  --output "output/看屋檢查清單_新北建案_${D}_三_生活機能與交通.xlsx"
-python3 scripts/build_xlsx.py --data $SP --slim --categories 5 \
-  --output "output/看屋檢查清單_新北建案_${D}_四_環境風險.xlsx"
-python3 scripts/build_xlsx.py --data $SP --slim --categories 6 \
-  --output "output/看屋檢查清單_新北建案_${D}_五_財務評估.xlsx"
+declare -a N=("一_基本資料" "二_建商與代銷" "三_產品與坪數" "四_生活機能與交通" "五_環境風險" "六_財務評估")
+for i in 1 2 3 4 5 6; do
+  python3 scripts/build_xlsx.py --data "$SP" --slim --categories $i \
+    --output "output/看屋檢查清單_新北建案_${D}_${N[$((i-1))]}.xlsx"
+done
 ```
 
-五份都保留**全部建案欄位**，只是各切一段項目，橫向比較不受影響。
+六份都保留**全部建案欄位**，只是各切一段項目，橫向比較不受影響。
 
 `--slim` 會移除 xlsx 內的 theme 部件（並把 styles.xml 唯一的 theme 參照換成實色，
 避免懸空參照讓 Excel 判定損毀），檔案縮小約 18%，顯示效果完全一樣。
+
+**只用 `--slim` 不夠**（七案規模每份約 8.3~8.7KB，base64 超過 11,000）。還要做二次瘦身：
+移除 `docProps/app.xml`、`docProps/core.xml`（連同 `[Content_Types].xml` 與 `_rels/.rels`
+裡的對應項目），並以 `ZIP_DEFLATED, compresslevel=9`、固定 `ZipInfo` 時間戳重新打包。
+做完後每份約 6.8~8.0KB、base64 約 9,100~10,700，實測六份皆一次上傳成功。
+瘦身後用 `openpyxl.load_workbook()` 開一次確認沒壞，再上傳。
 
 產完先量尺寸，確認每份的 base64 長度都在上限內：
 
@@ -166,9 +169,9 @@ JSON 結構詳見 `scripts/build_xlsx.py` 檔頭註解；`data/projects_data_202
 
 ---
 
-## Step 5：上傳 Google Drive（必須分五份）
+## Step 5：上傳 Google Drive（必須分六份）
 
-依序上傳五個檔案，**一次回應只傳一份**，每份都用 `Google Drive:create_file`：
+依序上傳六個檔案（先大後小），**一次回應只傳一份**，每份都用 `Google Drive:create_file`：
 - `parentId`: `12wETI6GI8F5arzLwg7ZkMXd5K5P4Swi-`
 - `contentMimeType`: `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
 - `disableConversionToGoogleType`: `true`（**必加**，否則被轉成 Google 試算表，顏色與格式全失）
@@ -203,7 +206,7 @@ Drive 的文字擷取是**非同步索引**的，剛上傳的檔案讀回來一�
 另註：`get_file_metadata` **不回傳 md5Checksum**，所以沒有「免費的雲端驗證」可用，
 這也是上面決定只比 fileSize 的原因之一。
 
-五份都上傳成功後，把上一輪日期的舊檔用 `trash_file` 清掉，避免資料夾混淆。
+六份都上傳成功後，把上一輪日期的舊檔用 `trash_file` 清掉，避免資料夾混淆。
 
 ### ⚠️ base64 傳輸上限（2026-08-23／08-24 兩次實測）
 Drive 連接器只接受「內嵌的 base64 檔案內容」，沒有本機路徑上傳，
@@ -296,13 +299,13 @@ base64 必須由模型逐字元輸出，太長會被輸出上限截斷或掉字�
 
 上傳完成後：
 - **互動對話**：另外呼叫 `SendUserFile` 讓使用者也能直接下載，並回報各案更新重點
-- **排程執行**：不需 `SendUserFile`；把五個 `viewUrl` 與本輪更新摘要寫進任務結論
+- **排程執行**：不需 `SendUserFile`；把六個 `viewUrl` 與本輪更新摘要寫進任務結論
 
 ---
 
 ## Step 6：留存到 repo
 
-把本輪的 JSON 存成 `data/projects_data_YYYY-MM-DD.json`、五份 xlsx 放 `output/`，
+把本輪的 JSON 存成 `data/projects_data_YYYY-MM-DD.json`、六份 xlsx 放 `output/`，
 一起 commit 並 push 回 `claude/new-taipei-house-scraper-vx1gm1` 分支，
 下一輪即可直接沿用（Step 1 的第 1 順位）。
 
@@ -316,7 +319,7 @@ base64 必須由模型逐字元輸出，太長會被輸出上限截斷或掉字�
 - **分類列**：淺藍 #BDD7EE 底加粗
 - **資料列**：行高 45、自動換行、上對齊；紅字=未知待查詢或【現場確認】、橘字=【試算】、綠字=✅正面條件、藍字粗體=超出看屋範圍
 - **欄寬**：A=5、B=18、C 起每案 38；凍結窗格 C4
-- **檔名**：`看屋檢查清單_新北建案_YYYY-MM-DD_{一_基本與建商|二_產品與坪數|三_生活機能與交通|四_環境風險|五_財務評估}.xlsx`
+- **檔名**：`看屋檢查清單_新北建案_YYYY-MM-DD_{一_基本資料|二_建商與代銷|三_產品與坪數|四_生活機能與交通|五_環境風險|六_財務評估}.xlsx`
 
 ---
 
