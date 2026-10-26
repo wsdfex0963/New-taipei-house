@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-產生「新北市建案 看屋檢查清單」比較表 Excel。
+產生「雙北建案 看屋檢查清單」比較表 Excel。
 
 輸入 JSON 結構 (--data)：
 {
+  "title": "雙北建案 看屋檢查清單",   # 選填，省略時用 TITLE
   "search_date": "2026-08-24",
   "sources": "591新建案、591實價登錄、樂居、住展、5168比價王...",
   "projects": [
@@ -44,7 +45,7 @@ from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-TITLE = "新北市建案 看屋檢查清單"
+TITLE = "雙北建案 看屋檢查清單"
 
 CATEGORIES = [
     ("一、基本資料", [
@@ -147,6 +148,7 @@ def build_workbook(payload, categories=None, items=None):
     projects = payload.get("projects", [])
     search_date = payload.get("search_date", "")
     sources = payload.get("sources", "")
+    title = payload.get("title", TITLE)
 
     selected = CATEGORIES if categories is None else [
         CATEGORIES[i - 1] for i in categories
@@ -166,7 +168,7 @@ def build_workbook(payload, categories=None, items=None):
 
     # 第1列：標題
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=n_cols)
-    title_cell = ws.cell(row=1, column=1, value=TITLE)
+    title_cell = ws.cell(row=1, column=1, value=title)
     title_cell.font = Font(size=16, bold=True, color="FFFFFF")
     title_cell.fill = PatternFill("solid", fgColor=DARK_BLUE)
     title_cell.alignment = Alignment(horizontal="center", vertical="center")

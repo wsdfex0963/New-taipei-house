@@ -5,11 +5,11 @@ description: >
   依「47 項看屋檢查清單」逐項搜尋公開資訊與實價登錄，輸出六份格式化 Excel 比較表，
   並自動上傳至 Google Drive「看房」資料夾。每週五 09:00（台北）排程自動執行。
 
-  ALWAYS trigger this skill for prompts containing: "看屋檢查清單", "新北建案",
+  ALWAYS trigger this skill for prompts containing: "看屋檢查清單", "新北建案", "雙北建案", "長虹MVP",
   "看房比較", "看屋表", "更新看屋", "建案比較", "預售屋比較", or any project name
   in the active list (民生新埔, 敦南之森, 新濠漾, 新濠岳, 文德好境, 將捷MRT／景平站, 晴空大地／仁義重劃區).
   Also trigger when the user references the file name pattern
-  "看屋檢查清單_新北建案_*.xlsx", or when the weekly Routine「New taipei house 每週看屋清單更新」fires.
+  "看屋檢查清單_雙北建案_*.xlsx"（舊稱 新北建案）, or when the weekly Routine「New taipei house 每週看屋清單更新」fires.
 ---
 
 # 新北市建案看屋檢查清單：執行指南
@@ -34,7 +34,7 @@ description: >
 
 1. **repo 內 `data/projects_data_*.json`** 取日期最新的一份 → 直接當起點（最省時，格式已對齊）
 2. **Google Drive「看房」資料夾**有上一輪的 xlsx → 用 `Google Drive:search_files`
-   （`query: "title contains '看屋檢查清單_新北建案_' and parentId = '12wETI6GI8F5arzLwg7ZkMXd5K5P4Swi-'"`）
+   （`query: "title contains '看屋檢查清單_雙北建案_' and parentId = '12wETI6GI8F5arzLwg7ZkMXd5K5P4Swi-'"`）
    讀回內容當 baseline
 3. **都沒有** → 從空白起跑，全部標「未知待查詢」再逐步補
 
@@ -141,7 +141,7 @@ D=YYYY-MM-DD
 declare -a N=("一_基本資料" "二_建商與代銷" "三_產品與坪數" "四_生活機能與交通" "五_環境風險" "六_財務評估")
 for i in 1 2 3 4 5 6; do
   python3 scripts/build_xlsx.py --data "$SP" --slim --categories $i \
-    --output "output/看屋檢查清單_新北建案_${D}_${N[$((i-1))]}.xlsx"
+    --output "output/看屋檢查清單_雙北建案_${D}_${N[$((i-1))]}.xlsx"
 done
 ```
 
@@ -260,7 +260,7 @@ base64 必須由模型逐字元輸出，太長會被輸出上限截斷或掉字�
 → 12,000 以上重傳沒有意義，錯誤會重現，必須改用 `--items` 拆半。
 
 **拆半後的檔名慣例**：在分類序號後加 A／B，例如
-`看屋檢查清單_新北建案_YYYY-MM-DD_三A_產品與坪數.xlsx`、`..._三B_...`。
+`看屋檢查清單_雙北建案_YYYY-MM-DD_三A_產品與坪數.xlsx`、`..._三B_...`。
 
 ### 2026-09-11 修正：±6 bytes 不是長度問題，是「同一份位元組串」問題
 
@@ -313,13 +313,13 @@ base64 必須由模型逐字元輸出，太長會被輸出上限截斷或掉字�
 
 ## 輸出格式規格（腳本已固定）
 
-- **第 1 列**：標題「新北市建案 看屋檢查清單」深藍 #1F3864 底白字、16pt 粗體、置中、合併
+- **第 1 列**：標題「雙北建案 看屋檢查清單」深藍 #1F3864 底白字、16pt 粗體、置中、合併
 - **第 2 列**：搜尋日期 + 來源清單 + 共通法規/試算說明
 - **第 3 列**：表頭（深藍底白字），每欄含「建案名稱\n地址\n捷運站」
 - **分類列**：淺藍 #BDD7EE 底加粗
 - **資料列**：行高 45、自動換行、上對齊；紅字=未知待查詢或【現場確認】、橘字=【試算】、綠字=✅正面條件、藍字粗體=超出看屋範圍
 - **欄寬**：A=5、B=18、C 起每案 38；凍結窗格 C4
-- **檔名**：`看屋檢查清單_新北建案_YYYY-MM-DD_{一_基本資料|二_建商與代銷|三_產品與坪數|四_生活機能與交通|五_環境風險|六_財務評估}.xlsx`
+- **檔名**：`看屋檢查清單_雙北建案_YYYY-MM-DD_{一_基本資料|二_建商與代銷|三_產品與坪數|四_生活機能與交通|五_環境風險|六_財務評估}.xlsx`
 
 ---
 
