@@ -62,7 +62,7 @@
   "liquefaction": "高",
   "verdict": "觀望",
   "lever": "近6月實登78.2萬，開價76~86萬；約1,300戶量體，轉手競爭多",
-  "risk": "液化潛勢八案唯一『高』、網評不給客變、北環段2030年底才完工",
+  "risk": "液化潛勢六案唯一『高』、網評不給客變、北環段2030年底才完工",
   "monthly_qy": 2.83,
   "loan_ratio": 0.8,
   "fees": 12.5
@@ -85,23 +85,6 @@
   "fees": 12.5
  },
  {
-  "name": "新濠漾 II",
-  "district": "新北三重",
-  "stage": "成屋（II期）",
-  "ask_mid": null,
-  "deal_median": 67,
-  "entry_total": 1438,
-  "monthly": 4.44,
-  "public_pct": 33.9,
-  "liquefaction": "中",
-  "verdict": "拿新期比價",
-  "lever": "同系列III/4期預售83~85萬，II期成交約66~69萬，期別差逾15萬",
-  "risk": "最小戶21.79坪、總價破1,400萬，超出新青安1,000萬額度部分利率較高",
-  "monthly_qy": 4.12,
-  "loan_ratio": 0.8,
-  "fees": 18
- },
- {
   "name": "文德好境",
   "district": "台北內湖",
   "stage": "中古（屋齡待確認）",
@@ -117,22 +100,5 @@
   "monthly_qy": 2.92,
   "loan_ratio": 0.7,
   "fees": 32
- },
- {
-  "name": "新濠岳",
-  "district": "新北土城",
-  "stage": "預售・2029Q3",
-  "ask_mid": null,
-  "deal_median": 77.3,
-  "entry_total": null,
-  "monthly": null,
-  "public_pct": 36,
-  "liquefaction": "低",
-  "verdict": "先要價目表",
-  "lever": "近6月實登77.3萬，高於土城預售中位70.7萬；12坪已完銷",
-  "risk": "距交屋約3年，工程期款與利率變數大；661戶供給多",
-  "monthly_qy": null,
-  "loan_ratio": 0.8,
-  "fees": null
  }
 ]
