@@ -1,13 +1,13 @@
 ---
 name: new-taipei-house
 description: >
-  雙北建案看屋檢查清單產生器。針對使用者鎖定的預售/新成屋建案（目前 9 案，含台北內湖、萬華、台中烏日各一案），
+  雙北建案看屋檢查清單產生器。針對使用者鎖定的預售/新成屋建案（目前 10 案，含台北內湖兩案、萬華、台中烏日各一案），
   依「47 項看屋檢查清單」逐項搜尋公開資訊與實價登錄，輸出六份格式化 Excel 比較表，
   並自動上傳至 Google Drive「看房」資料夾。每週五 09:00（台北）排程自動執行。
 
   ALWAYS trigger this skill for prompts containing: "看屋檢查清單", "新北建案", "雙北建案", "長虹MVP",
   "看房比較", "看屋表", "更新看屋", "建案比較", "預售屋比較", or any project name
-  in the active list (民生新埔, 敦南之森, 文德好境, 將捷MRT／景平站, 晴空大地／仁義重劃區, 長虹MVP, 櫻花心綻, 合康植芯, 新濠漾4-英倫公園／英倫公園).
+  in the active list (民生新埔, 敦南之森, 文德好境, 將捷MRT／景平站, 晴空大地／仁義重劃區, 長虹MVP, 櫻花心綻, 合康植芯, 新濠漾4-英倫公園／英倫公園, 恆悅麗山／港墘).
   Also trigger when the user references the file name pattern
   "看屋檢查清單_雙北建案_*.xlsx"（舊稱 新北建案）, or when the weekly Routine「New taipei house 每週看屋清單更新」fires.
 ---
@@ -173,11 +173,13 @@ JSON 結構詳見 `scripts/build_xlsx.py` 檔頭註解；`data/projects_data_202
 
 ## Step 5：上傳 Google Drive（必須分六份）
 
-依序上傳六個檔案（先大後小），**一次回應只傳一份**，每份都用 `Google Drive:create_file`：
+每份都用 `Google Drive:create_file`：
 - `parentId`: `12wETI6GI8F5arzLwg7ZkMXd5K5P4Swi-`
 - `contentMimeType`: `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
 - `disableConversionToGoogleType`: `true`（**必加**，否則被轉成 Google 試算表，顏色與格式全失）
-- `base64Content`: 該檔的 base64（用 `base64 -w0 <檔案>` 取得）
+- `base64Content`: **優先用檔案參照** `sha256:<64位小寫hex>:<檔案絕對路徑>`（hex 用 `sha256sum <檔案>` 取得），
+  由 app 帶入檔案內容、不經手抄，六份可在同一回應平行上傳（2026-11-14 實測六份 fileSize 全數相符）。
+  只有連接器不接受檔案參照時，才改用 `base64 -w0 <檔案>` 手抄：此時依序上傳（先大後小）、**一次回應只傳一份**。
 
 **每次上傳後核對回傳的 `fileSize` 與本機 `stat -c%s` 是否完全相同。**
 不一致代表傳輸掉字元 → 用 `Google Drive:trash_file` 刪掉再重傳。
