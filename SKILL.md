@@ -7,7 +7,7 @@ description: >
 
   ALWAYS trigger this skill for prompts containing: "看屋檢查清單", "新北建案", "雙北建案", "長虹MVP",
   "看房比較", "看屋表", "更新看屋", "建案比較", "預售屋比較", or any project name
-  in the active list (民生新埔, 敦南之森, 文德好境, 將捷MRT／景平站, 晴空大地／仁義重劃區, 長虹MVP, 櫻花心綻, 合康植芯, 新濠漾4-英倫公園／英倫公園, 恆悅麗山／港墘).
+  in the active list (民生新埔, 敦南之森, 文德好境, 將捷MRT／景平站, 晴空大地／仁義重劃區, 長虹MVP, 櫻花心綻, 合康植芯, 新濠漾4-英倫公園／英倫公園, 美麗湖／大湖公園站).
   Also trigger when the user references the file name pattern
   "看屋檢查清單_雙北建案_*.xlsx"（舊稱 新北建案）, or when the weekly Routine「New taipei house 每週看屋清單更新」fires.
 ---
